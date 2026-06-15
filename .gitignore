@@ -1,0 +1,12 @@
+# Bank statements and financial data — keep LOCAL only, never commit
+data/*.csv
+data/*.xlsx
+data/*.xls
+*.csv
+*.xlsx
+*.xls
+*.pdf
+
+# OS files
+.DS_Store
+Thumbs.db
