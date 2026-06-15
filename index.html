@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arvin — Financial Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); border: 1px solid #e2e8f0; }
+    .progress-bar { height: 7px; border-radius: 4px; background: #f1f5f9; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; transition: width .6s cubic-bezier(.4,0,.2,1); }
+    .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+    .fade-in { animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .drop-zone { border: 2px dashed #cbd5e1; border-radius: 12px; transition: border-color .2s, background .2s; }
+    .drop-zone.drag-over { border-color: #22c55e; background: #f0fdf4; }
+    .trend-line { position: relative; }
+    .stat-delta-up { color: #22c55e; }
+    .stat-delta-down { color: #ef4444; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f8fafc; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+  <!-- ── HEADER ────────────────────────────────────────────── -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+      <div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0">
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <h1 class="text-sm font-semibold text-slate-900 leading-none">Arvin Financial Dashboard</h1>
+        <p class="text-xs text-slate-400 mt-0.5" id="dataSourceLabel">Navy Federal · Card spending analysis</p>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <select id="dateFilter" class="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <option value="current">This Month</option>
+          <option value="last3">Last 3 Months</option>
+          <option value="last6">Last 6 Months</option>
+          <option value="ytd">Year to Date</option>
+          <option value="all" selected>All Time</option>
+        </select>
+        <label class="cursor-pointer bg-slate-900 hover:bg-slate-700 text-white text-xs px-3 py-1.5 rounded-lg transition font-medium">
+          Upload CSV
+          <input type="file" id="csvUploadHeader" accept=".csv" class="hidden">
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── MAIN ──────────────────────────────────────────────── -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+
+    <!-- BUDGET SUMMARY (always visible) -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 fade-in">
+      <div class="card">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Monthly Take-Home</p>
+        <p class="text-2xl font-bold text-slate-900 mt-1.5">$4,500</p>
+        <p class="text-xs text-slate-400 mt-1">Est. after taxes + Roth</p>
+      </div>
+      <div class="card">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Survival Cost</p>
+        <p class="text-2xl font-bold text-slate-900 mt-1.5">$2,537</p>
+        <p class="text-xs text-amber-500 font-medium mt-1">56% of income · Goal &lt;50%</p>
+      </div>
+      <div class="card">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Fixed Monthly Bills</p>
+        <p class="text-2xl font-bold text-slate-900 mt-1.5">$1,277</p>
+        <p class="text-xs text-slate-400 mt-1">Car · Loan · Gym · Utils</p>
+      </div>
+      <div class="card">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Post-Car Rate</p>
+        <p class="text-2xl font-bold text-emerald-600 mt-1.5">41%</p>
+        <p class="text-xs text-emerald-600 font-medium mt-1">After payoff — great target!</p>
+      </div>
+    </div>
+
+    <!-- TRANSACTION STATS BAR (shown after data loads) -->
+    <div id="statsBar" class="hidden grid grid-cols-2 sm:grid-cols-4 gap-3 fade-in">
+      <div class="card !py-3.5">
+        <p class="text-xs text-slate-400">Total Spent (period)</p>
+        <p class="text-xl font-bold text-slate-900 mt-0.5" id="statTotal">—</p>
+      </div>
+      <div class="card !py-3.5">
+        <p class="text-xs text-slate-400">Monthly Average</p>
+        <p class="text-xl font-bold text-slate-900 mt-0.5" id="statMonthAvg">—</p>
+      </div>
+      <div class="card !py-3.5">
+        <p class="text-xs text-slate-400">Transactions</p>
+        <p class="text-xl font-bold text-slate-900 mt-0.5" id="statCount">—</p>
+      </div>
+      <div class="card !py-3.5">
+        <p class="text-xs text-slate-400">Biggest Month</p>
+        <p class="text-xl font-bold text-red-500 mt-0.5" id="statBigMonth">—</p>
+      </div>
+    </div>
+
+    <!-- UPLOAD PROMPT (shown when no data) -->
+    <div id="uploadPrompt" class="card text-center py-14 fade-in">
+      <div class="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <svg class="w-7 h-7 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+        </svg>
+      </div>
+      <h2 class="text-base font-semibold text-slate-900 mb-1">Upload Your Bank Statement</h2>
+      <p class="text-sm text-slate-400 mb-5 max-w-sm mx-auto">Export your Navy Federal transactions as CSV and drop it here to see your full spending analysis.</p>
+      <label id="dropZone" class="drop-zone cursor-pointer inline-block px-6 py-3 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-700 transition">
+        Choose CSV File
+        <input type="file" id="csvUploadMain" accept=".csv" class="hidden">
+      </label>
+      <p class="text-xs text-slate-300 mt-3">Data stays in your browser — nothing leaves your device</p>
+    </div>
+
+    <!-- CHARTS (hidden until data loads) -->
+    <div id="chartsSection" class="hidden space-y-5 fade-in">
+
+      <!-- Row 1: Donut + Monthly Trend -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        <!-- Category Breakdown -->
+        <div class="card">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-slate-900">Spending by Category</h2>
+            <span class="chip bg-slate-100 text-slate-600" id="categoryPeriodLabel">—</span>
+          </div>
+          <div class="flex items-center gap-5">
+            <div class="relative flex-shrink-0" style="width:170px;height:170px">
+              <canvas id="categoryChart"></canvas>
+              <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span class="text-xs text-slate-400 leading-none">Total</span>
+                <span class="text-base font-bold text-slate-900 mt-0.5" id="donutTotal">—</span>
+              </div>
+            </div>
+            <div id="categoryLegend" class="flex-1 space-y-2.5 min-w-0"></div>
+          </div>
+        </div>
+
+        <!-- Monthly Spending Trend -->
+        <div class="card">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-slate-900">Monthly Spending Trend</h2>
+            <span class="chip bg-blue-50 text-blue-600">Debits only</span>
+          </div>
+          <canvas id="trendChart"></canvas>
+        </div>
+
+      </div>
+
+      <!-- Budget vs Actual -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-sm font-semibold text-slate-900">Budget vs. Actual</h2>
+          <span class="text-xs text-slate-400" id="budgetPeriodLabel">Monthly average</span>
+        </div>
+        <div id="budgetBars" class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5"></div>
+      </div>
+
+      <!-- Row 3: Top Merchants + Insights -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        <!-- Top Merchants -->
+        <div class="card">
+          <h2 class="text-sm font-semibold text-slate-900 mb-4">Top Merchants by Spend</h2>
+          <div id="merchantList" class="space-y-3"></div>
+        </div>
+
+        <!-- Spending Insights -->
+        <div class="card">
+          <h2 class="text-sm font-semibold text-slate-900 mb-4">Spending Insights</h2>
+          <div id="insightsList" class="space-y-2.5"></div>
+        </div>
+
+      </div>
+
+      <!-- Transactions Table -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-semibold text-slate-900">Transactions</h2>
+          <div class="flex items-center gap-2">
+            <input id="txSearch" type="text" placeholder="Search…" class="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 w-40 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <span class="chip bg-slate-100 text-slate-600" id="transactionCount">0</span>
+          </div>
+        </div>
+        <div class="overflow-x-auto -mx-5">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="border-y border-slate-100">
+                <th class="text-left py-2 px-5 font-medium text-slate-400 whitespace-nowrap">Date</th>
+                <th class="text-left py-2 pr-4 font-medium text-slate-400">Merchant</th>
+                <th class="text-left py-2 pr-4 font-medium text-slate-400">Category</th>
+                <th class="text-right py-2 px-5 font-medium text-slate-400">Amount</th>
+              </tr>
+            </thead>
+            <tbody id="transactionTable" class="divide-y divide-slate-50"></tbody>
+          </table>
+        </div>
+        <div id="loadMoreRow" class="text-center mt-4 hidden">
+          <button id="loadMoreBtn" class="text-xs text-emerald-600 hover:text-emerald-700 font-medium px-4 py-2 rounded-lg hover:bg-emerald-50 transition">
+            Load more transactions
+          </button>
+        </div>
+      </div>
+
+    </div><!-- /chartsSection -->
+
+  </main>
+
+  <footer class="text-center py-6 text-xs text-slate-300">
+    All data processed locally in your browser · Nothing is sent to any server
+  </footer>
+
+  <script>
+  // ═══════════════════════════════════════════════
+  // CONFIG
+  // ═══════════════════════════════════════════════
+
+  const MONTHLY_INCOME = 4500;
+
+  const FIXED_COSTS = {
+    'Car Payment': 712,
+    'Car Insurance': 110,
+    'Gym + Health': 120,
+    'Student Loan': 250,
+    'Utilities': 85,
+  };
+
+  const CAT_COLORS = {
+    'Dining Out':      '#ef4444',
+    'Groceries':       '#22c55e',
+    'Gas':             '#f59e0b',
+    'Shopping':        '#8b5cf6',
+    'Entertainment':   '#06b6d4',
+    'Church & Giving': '#ec4899',
+    'Subscriptions':   '#64748b',
+    'Health':          '#14b8a6',
+    'Travel':          '#3b82f6',
+    'Other':           '#94a3b8',
+  };
+
+  const CAT_BUDGETS = {
+    'Dining Out':      779,
+    'Groceries':       346,
+    'Gas':             303,
+    'Shopping':        217,
+    'Entertainment':   50,
+    'Church & Giving': 100,
+  };
+
+  const NAVY_FED_MAP = {
+    'Restaurants/Dining':      'Dining Out',
+    'Groceries':               'Groceries',
+    'Gasoline/Fuel':           'Gas',
+    'General Merchandise':     'Shopping',
+    'Entertainment':           'Entertainment',
+    'Hobbies':                 'Entertainment',
+    'Charitable Giving':       'Church & Giving',
+    'Utilities':               'Subscriptions',
+    'Health Care':             'Health',
+    'Medical/Dental/Vision':   'Health',
+    'Travel':                  'Travel',
+    'Airline':                 'Travel',
+    'Hotel/Lodging':           'Travel',
+    'Auto':                    'Other',
+    'Insurance':               'Other',
+    'ATM/Cash':                'Other',
+    'Other':                   'Other',
+    // excluded
+    'Credit Card Payments':    null,
+    'Payment':                 null,
+    'Rewards':                 null,
+  };
+
+  // ═══════════════════════════════════════════════
+  // STATE
+  // ═══════════════════════════════════════════════
+
+  let allTx = [];
+  let filteredTx = [];
+  let searchTx = [];
+  let shownCount = 30;
+  let catChart = null;
+  let trendChart = null;
+
+  // ═══════════════════════════════════════════════
+  // PARSING
+  // ═══════════════════════════════════════════════
+
+  function parseCSV(csvText) {
+    const { data } = Papa.parse(csvText, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: h => h.trim(),
+    });
+
+    const txs = [];
+
+    for (const row of data) {
+      const indicator = (row['Credit Debit Indicator'] || '').trim();
+      const typeGroup  = (row['Type Group'] || '').trim();
+      const rawCat     = (row['Category'] || '').trim();
+
+      if (indicator === 'Credit') continue;
+      if (typeGroup === 'Payment') continue;
+      if (NAVY_FED_MAP[rawCat] === null) continue;
+      if (rawCat === 'Credit Card Payments' || rawCat === 'Rewards') continue;
+
+      const amount = parseFloat(row['Amount']) || 0;
+      if (amount <= 0) continue;
+
+      const dateStr = (row['Posting Date'] || row['Transaction Date'] || '').trim();
+      const date    = parseDate(dateStr);
+      if (!date) continue;
+
+      const cat = NAVY_FED_MAP[rawCat] || 'Other';
+
+      txs.push({
+        date,
+        dateStr,
+        description: (row['Description'] || '').trim(),
+        category: cat,
+        rawCategory: rawCat,
+        amount,
+      });
+    }
+
+    txs.sort((a, b) => b.date - a.date);
+    return txs;
+  }
+
+  function parseDate(str) {
+    if (!str) return null;
+    const [m, d, y] = str.split('/');
+    if (!m || !d || !y) return null;
+    return new Date(+y, +m - 1, +d);
+  }
+
+  // ═══════════════════════════════════════════════
+  // DATE FILTER
+  // ═══════════════════════════════════════════════
+
+  function getRange(filter) {
+    const now   = new Date();
+    const yr    = now.getFullYear();
+    const mo    = now.getMonth();
+    switch (filter) {
+      case 'current': return { start: new Date(yr, mo, 1),     end: new Date(yr, mo + 1, 0) };
+      case 'last3':   return { start: new Date(yr, mo - 2, 1), end: now };
+      case 'last6':   return { start: new Date(yr, mo - 5, 1), end: now };
+      case 'ytd':     return { start: new Date(yr, 0, 1),      end: now };
+      default:        return null;
+    }
+  }
+
+  function applyFilter(txs, filter) {
+    const range = getRange(filter);
+    if (!range) return txs;
+    return txs.filter(t => t.date >= range.start && t.date <= range.end);
+  }
+
+  function monthCount(filter, txs) {
+    if (filter === 'current') return 1;
+    if (filter === 'last3')   return 3;
+    if (filter === 'last6')   return 6;
+    if (filter === 'ytd')     return new Date().getMonth() + 1;
+    if (txs.length === 0)     return 1;
+    const oldest = txs[txs.length - 1].date;
+    const newest = txs[0].date;
+    const n = (newest.getFullYear() - oldest.getFullYear()) * 12
+            + (newest.getMonth() - oldest.getMonth()) + 1;
+    return Math.max(1, n);
+  }
+
+  // ═══════════════════════════════════════════════
+  // AGGREGATIONS
+  // ═══════════════════════════════════════════════
+
+  function byCat(txs) {
+    return txs.reduce((acc, t) => {
+      acc[t.category] = (acc[t.category] || 0) + t.amount;
+      return acc;
+    }, {});
+  }
+
+  function byMonth(txs) {
+    return txs.reduce((acc, t) => {
+      const k = `${t.date.getFullYear()}-${String(t.date.getMonth() + 1).padStart(2, '0')}`;
+      acc[k] = (acc[k] || 0) + t.amount;
+      return acc;
+    }, {});
+  }
+
+  function topMerchants(txs, n = 10) {
+    const acc = {};
+    for (const t of txs) {
+      const name = cleanName(t.description);
+      acc[name] = (acc[name] || 0) + t.amount;
+    }
+    return Object.entries(acc).sort((a, b) => b[1] - a[1]).slice(0, n);
+  }
+
+  function cleanName(desc) {
+    return desc
+      .replace(/\s+-\s+\d{4}$/, '')
+      .replace(/\s+[A-Z]{2}\s*-\s*\d{4}$/, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+      .slice(0, 38);
+  }
+
+  function monthLabel(key) {
+    const [y, m] = key.split('-');
+    return new Date(+y, +m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  }
+
+  // ═══════════════════════════════════════════════
+  // FORMAT
+  // ═══════════════════════════════════════════════
+
+  function fmt(n) {
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  function fmtDate(d) {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+  }
+
+  // ═══════════════════════════════════════════════
+  // RENDER — STATS BAR
+  // ═══════════════════════════════════════════════
+
+  function renderStats(txs, filter) {
+    const total     = txs.reduce((s, t) => s + t.amount, 0);
+    const months    = monthCount(filter, txs);
+    const monthly   = byMonth(txs);
+    const monthVals = Object.values(monthly);
+    const bigMonth  = Math.max(...monthVals, 0);
+
+    document.getElementById('statTotal').textContent    = fmt(total);
+    document.getElementById('statMonthAvg').textContent = fmt(total / months);
+    document.getElementById('statCount').textContent    = txs.length.toLocaleString();
+    document.getElementById('statBigMonth').textContent = fmt(bigMonth);
+
+    document.getElementById('statsBar').classList.remove('hidden');
+  }
+
+  // ═══════════════════════════════════════════════
+  // RENDER — CATEGORY DONUT
+  // ═══════════════════════════════════════════════
+
+  function renderCatChart(catTotals) {
+    const ctx    = document.getElementById('categoryChart').getContext('2d');
+    const sorted = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+    const labels = sorted.map(([c]) => c);
+    const data   = sorted.map(([, v]) => v);
+    const colors = labels.map(l => CAT_COLORS[l] || '#94a3b8');
+    const total  = data.reduce((a, b) => a + b, 0);
+
+    document.getElementById('donutTotal').textContent = fmt(total);
+
+    document.getElementById('categoryLegend').innerHTML = sorted.map(([cat, amt]) => `
+      <div class="flex items-center justify-between gap-1.5">
+        <div class="flex items-center gap-1.5 min-w-0">
+          <div class="w-2 h-2 rounded-full flex-shrink-0" style="background:${CAT_COLORS[cat] || '#94a3b8'}"></div>
+          <span class="text-xs text-slate-700 truncate">${cat}</span>
+        </div>
+        <div class="flex-shrink-0 text-right">
+          <span class="text-xs font-semibold text-slate-900">${fmt(amt)}</span>
+          <span class="text-xs text-slate-400 ml-1">${Math.round(amt / total * 100)}%</span>
+        </div>
+      </div>
+    `).join('');
+
+    if (catChart) catChart.destroy();
+    catChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff', hoverOffset: 4 }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        cutout: '66%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: c => ` ${c.label}: ${fmt(c.raw)} (${Math.round(c.raw / total * 100)}%)`,
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // ═══════════════════════════════════════════════
+  // RENDER — MONTHLY TREND
+  // ═══════════════════════════════════════════════
+
+  function renderTrend(monthly) {
+    const ctx  = document.getElementById('trendChart').getContext('2d');
+    const keys = Object.keys(monthly).sort();
+    const vals = keys.map(k => monthly[k]);
+    const avg  = vals.reduce((a, b) => a + b, 0) / (vals.length || 1);
+
+    if (trendChart) trendChart.destroy();
+    trendChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: keys.map(monthLabel),
+        datasets: [
+          {
+            label: 'Monthly Spend',
+            data: vals,
+            backgroundColor: vals.map(v => v > avg * 1.15 ? '#fee2e2' : v < avg * 0.85 ? '#dcfce7' : '#dbeafe'),
+            borderColor:     vals.map(v => v > avg * 1.15 ? '#ef4444' : v < avg * 0.85 ? '#22c55e' : '#3b82f6'),
+            borderWidth: 1.5,
+            borderRadius: 5,
+          },
+          {
+            label: 'Average',
+            data: keys.map(() => avg),
+            type: 'line',
+            borderColor: '#94a3b8',
+            borderWidth: 1.5,
+            borderDash: [4, 3],
+            pointRadius: 0,
+            fill: false,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: { label: c => ` ${c.dataset.label}: ${fmt(c.raw)}` },
+          },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: '#f1f5f9' },
+            ticks: {
+              callback: v => '$' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v),
+              font: { size: 10 },
+            },
+          },
+          x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        },
+      },
+    });
+  }
+
+  // ═══════════════════════════════════════════════
+  // RENDER — BUDGET VS ACTUAL
+  // ═══════════════════════════════════════════════
+
+  function renderBudget(catTotals, filter) {
+    const months = monthCount(filter, filteredTx);
+    const label  = months === 1 ? 'this month' : `avg over ${months} months`;
+    document.getElementById('budgetPeriodLabel').textContent = `Monthly average · ${label}`;
+
+    const rows = Object.entries(CAT_BUDGETS).map(([cat, budget]) => {
+      const spent  = (catTotals[cat] || 0) / months;
+      const pct    = Math.min((spent / budget) * 100, 130);
+      const over   = spent > budget;
+      const warn   = !over && pct > 85;
+      const color  = over ? '#ef4444' : warn ? '#f59e0b' : '#22c55e';
+      const badge  = over
+        ? `<span class="chip bg-red-50 text-red-600">Over ${fmt(spent - budget)}</span>`
+        : warn
+          ? `<span class="chip bg-amber-50 text-amber-600">Near limit</span>`
+          : `<span class="chip bg-emerald-50 text-emerald-600">On track</span>`;
+      return { cat, budget, spent, pct, color, badge };
+    });
+
+    document.getElementById('budgetBars').innerHTML = rows.map(({ cat, budget, spent, pct, color, badge }) => `
+      <div>
+        <div class="flex items-start justify-between gap-2 mb-1.5">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <div class="w-2 h-2 rounded-full flex-shrink-0 mt-0.5" style="background:${CAT_COLORS[cat] || '#94a3b8'}"></div>
+            <span class="text-xs font-medium text-slate-900">${cat}</span>
+            ${badge}
+          </div>
+          <div class="text-right flex-shrink-0">
+            <span class="text-xs font-semibold" style="color:${color}">${fmt(spent)}</span>
+            <span class="text-xs text-slate-400"> / ${fmt(budget)}</span>
+          </div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:${Math.min(pct, 100)}%;background:${color}"></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ═══════════════════════════════════════════════
+  // RENDER — TOP MERCHANTS
+  // ═══════════════════════════════════════════════
+
+  function renderMerchants(txs) {
+    const top    = topMerchants(txs, 8);
+    const maxAmt = top[0]?.[1] || 1;
+
+    document.getElementById('merchantList').innerHTML = top.map(([name, amt], i) => `
+      <div class="flex items-center gap-2.5">
+        <span class="text-xs font-medium text-slate-400 w-4 text-right flex-shrink-0">${i + 1}</span>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="text-xs text-slate-800 truncate font-medium">${name}</span>
+            <span class="text-xs font-semibold text-slate-900 flex-shrink-0">${fmt(amt)}</span>
+          </div>
+          <div class="progress-bar" style="height:4px">
+            <div class="progress-fill" style="width:${Math.round(amt / maxAmt * 100)}%;background:#3b82f6"></div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ═══════════════════════════════════════════════
+  // RENDER — INSIGHTS
+  // ═══════════════════════════════════════════════
+
+  function renderInsights(txs, catTotals, filter) {
+    const months  = monthCount(filter, txs);
+    const insights = [];
+
+    const COLORS = {
+      red:   'bg-red-50 border border-red-100 text-red-700',
+      amber: 'bg-amber-50 border border-amber-100 text-amber-700',
+      green: 'bg-emerald-50 border border-emerald-100 text-emerald-700',
+      blue:  'bg-blue-50 border border-blue-100 text-blue-700',
+    };
+
+    // Dining
+    const dineAmt = (catTotals['Dining Out'] || 0) / months;
+    const dineBgt = CAT_BUDGETS['Dining Out'];
+    if (dineAmt > dineBgt) {
+      insights.push({ icon: '🍽️', color: 'red',
+        text: `Dining out avg <strong>${fmt(dineAmt)}/mo</strong> — <strong>${fmt(dineAmt - dineBgt)} over</strong> your ${fmt(dineBgt)} budget.` });
+    } else {
+      insights.push({ icon: '🍽️', color: 'green',
+        text: `Dining out avg <strong>${fmt(dineAmt)}/mo</strong> — within your ${fmt(dineBgt)} budget. Keep it up!` });
+    }
+
+    // Dining visit count & avg ticket
+    const dineVisits = txs.filter(t => t.category === 'Dining Out');
+    if (dineVisits.length) {
+      const avgTicket = (catTotals['Dining Out'] || 0) / dineVisits.length;
+      insights.push({ icon: '🧾', color: 'blue',
+        text: `<strong>${dineVisits.length} restaurant visits</strong> in this period · avg ticket <strong>${fmt(avgTicket)}</strong>.` });
+    }
+
+    // Biggest single charge
+    const biggest = [...txs].sort((a, b) => b.amount - a.amount)[0];
+    if (biggest) {
+      insights.push({ icon: '💸', color: 'amber',
+        text: `Biggest charge: <strong>${fmt(biggest.amount)}</strong> at ${cleanName(biggest.description)} on ${fmtDate(biggest.date)}.` });
+    }
+
+    // Gas
+    const gasAmt = (catTotals['Gas'] || 0) / months;
+    const gasBgt = CAT_BUDGETS['Gas'];
+    insights.push({ icon: '⛽', color: gasAmt > gasBgt ? 'amber' : 'green',
+      text: `Gas avg <strong>${fmt(gasAmt)}/mo</strong> vs ${fmt(gasBgt)} budget${gasAmt > gasBgt ? ' — slightly over.' : ' — good!'}` });
+
+    // Savings estimate
+    const cardSpend  = Object.values(catTotals).reduce((a, b) => a + b, 0) / months;
+    const fixedTotal = Object.values(FIXED_COSTS).reduce((a, b) => a + b, 0);
+    const totalEst   = cardSpend + fixedTotal;
+    const saved      = MONTHLY_INCOME - totalEst;
+    const saveColor  = saved > 1000 ? 'green' : saved > 0 ? 'amber' : 'red';
+    insights.push({ icon: '💰', color: saveColor,
+      text: `Est. monthly savings: <strong>${fmt(saved)}</strong> (income − card avg − fixed bills).` });
+
+    document.getElementById('insightsList').innerHTML = insights.map(({ icon, color, text }) => `
+      <div class="flex gap-2 p-2.5 rounded-lg ${COLORS[color]}">
+        <span class="flex-shrink-0">${icon}</span>
+        <p class="text-xs leading-relaxed">${text}</p>
+      </div>
+    `).join('');
+  }
+
+  // ═══════════════════════════════════════════════
+  // RENDER — TRANSACTION TABLE
+  // ═══════════════════════════════════════════════
+
+  function renderTable(txs, show) {
+    const slice = txs.slice(0, show);
+    document.getElementById('transactionCount').textContent = txs.length.toLocaleString() + ' rows';
+
+    document.getElementById('transactionTable').innerHTML = slice.map(t => `
+      <tr class="hover:bg-slate-50/60 transition">
+        <td class="py-2.5 px-5 text-slate-400 whitespace-nowrap">${fmtDate(t.date)}</td>
+        <td class="py-2.5 pr-4 text-slate-900 max-w-[200px] truncate">${cleanName(t.description)}</td>
+        <td class="py-2.5 pr-4">
+          <span class="chip" style="background:${(CAT_COLORS[t.category] || '#94a3b8')}20;color:${CAT_COLORS[t.category] || '#94a3b8'}">${t.category}</span>
+        </td>
+        <td class="py-2.5 px-5 text-right font-semibold text-slate-900">${fmt(t.amount)}</td>
+      </tr>
+    `).join('');
+
+    const more = document.getElementById('loadMoreRow');
+    txs.length > show ? more.classList.remove('hidden') : more.classList.add('hidden');
+  }
+
+  // ═══════════════════════════════════════════════
+  // MAIN UPDATE
+  // ═══════════════════════════════════════════════
+
+  function update() {
+    const filter = document.getElementById('dateFilter').value;
+    filteredTx   = applyFilter(allTx, filter);
+    const query  = document.getElementById('txSearch').value.trim().toLowerCase();
+    searchTx     = query
+      ? filteredTx.filter(t => t.description.toLowerCase().includes(query) || t.category.toLowerCase().includes(query))
+      : filteredTx;
+
+    const catTotals = byCat(filteredTx);
+    const monthly   = byMonth(filteredTx);
+
+    renderStats(filteredTx, filter);
+    renderCatChart(catTotals);
+    renderTrend(monthly);
+    renderBudget(catTotals, filter);
+    renderMerchants(filteredTx);
+    renderInsights(filteredTx, catTotals, filter);
+    renderTable(searchTx, shownCount);
+
+    // update period label on donut
+    const months = monthCount(filter, filteredTx);
+    document.getElementById('categoryPeriodLabel').textContent = months === 1 ? 'This month' : `${months} months`;
+
+    document.getElementById('chartsSection').classList.remove('hidden');
+  }
+
+  // ═══════════════════════════════════════════════
+  // HANDLE CSV
+  // ═══════════════════════════════════════════════
+
+  function loadData(text, sourceName) {
+    allTx       = parseCSV(text);
+    shownCount  = 30;
+
+    document.getElementById('uploadPrompt').classList.add('hidden');
+    document.getElementById('dataSourceLabel').textContent =
+      sourceName
+        ? `${sourceName} · ${allTx.length.toLocaleString()} transactions loaded`
+        : `Navy Federal · ${allTx.length.toLocaleString()} transactions loaded`;
+
+    if (allTx.length > 0) {
+      const oldest = allTx[allTx.length - 1];
+      const newest = allTx[0];
+      document.getElementById('dataSourceLabel').textContent =
+        `${sourceName || 'Navy Federal'} · ${fmtDate(oldest.date)} – ${fmtDate(newest.date)} · ${allTx.length.toLocaleString()} transactions`;
+    }
+
+    update();
+  }
+
+  function wireUpload(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = evt => loadData(evt.target.result, file.name.replace('.csv', ''));
+      reader.readAsText(file);
+      e.target.value = '';
+    });
+  }
+
+  // ═══════════════════════════════════════════════
+  // INIT
+  // ═══════════════════════════════════════════════
+
+  async function init() {
+    wireUpload('csvUploadHeader');
+    wireUpload('csvUploadMain');
+
+    document.getElementById('dateFilter').addEventListener('change', () => {
+      shownCount = 30;
+      update();
+    });
+
+    document.getElementById('txSearch').addEventListener('input', () => {
+      shownCount = 30;
+      update();
+    });
+
+    document.getElementById('loadMoreBtn').addEventListener('click', () => {
+      shownCount += 30;
+      renderTable(searchTx, shownCount);
+    });
+
+    // Drag-and-drop on upload prompt
+    const zone = document.getElementById('dropZone');
+    if (zone) {
+      zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+      zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        const file = e.dataTransfer?.files[0];
+        if (file && file.name.endsWith('.csv')) {
+          const reader = new FileReader();
+          reader.onload = evt => loadData(evt.target.result, file.name.replace('.csv', ''));
+          reader.readAsText(file);
+        }
+      });
+    }
+
+    // Try to auto-load from repo
+    try {
+      const res = await fetch('./data/transactions.csv');
+      if (res.ok) {
+        const text = await res.text();
+        loadData(text, 'Navy Federal');
+        return;
+      }
+    } catch (_) { /* running from file:// */ }
+
+    // Show upload prompt
+    document.getElementById('uploadPrompt').classList.remove('hidden');
+  }
+
+  init();
+  </script>
+</body>
+</html>
