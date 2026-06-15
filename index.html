@@ -32,6 +32,18 @@
     .file-tag { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; background:#f1f5f9; color:#475569; font-size:11px; font-weight:500; }
     .file-tag button { color:#94a3b8; line-height:1; font-size:13px; }
     .file-tag button:hover { color:#ef4444; }
+    .print-only { display:none; }
+    @media print {
+      @page { margin: 1.5cm; }
+      body { background:#fff !important; }
+      header { position:static !important; border-bottom:1px solid #e2e8f0; }
+      .no-print { display:none !important; }
+      .print-only { display:block !important; }
+      .card, .card-sm { box-shadow:none !important; break-inside:avoid; }
+      #uploadPrompt { display:none !important; }
+      #loadMoreRow { display:none !important; }
+      canvas { max-width:100%; }
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen">
@@ -46,10 +58,10 @@
     </div>
     <div class="flex-1 min-w-0">
       <h1 class="text-sm font-semibold text-slate-900 leading-none">Arvin — 2026 Financial Dashboard</h1>
-      <div id="loadedFilesRow" class="flex items-center gap-1.5 mt-1 flex-wrap"></div>
+      <div id="loadedFilesRow" class="no-print flex items-center gap-1.5 mt-1 flex-wrap"></div>
     </div>
     <div class="flex items-center gap-2 flex-shrink-0">
-      <select id="dateFilter" class="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      <select id="dateFilter" class="no-print text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
         <option value="ytd" selected>2026 YTD</option>
         <option value="2026">All of 2026</option>
         <option value="current">This Month</option>
@@ -57,13 +69,23 @@
         <option value="last6">Last 6 Months</option>
         <option value="all">All Time</option>
       </select>
-      <label id="addFilesBtn" class="cursor-pointer bg-slate-900 hover:bg-slate-700 text-white text-xs px-3 py-1.5 rounded-lg transition font-medium whitespace-nowrap">
+      <button id="pdfBtn" onclick="downloadPDF()" class="hidden no-print text-xs border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-800 px-3 py-1.5 rounded-lg transition font-medium whitespace-nowrap flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Download PDF
+      </button>
+      <label id="addFilesBtn" class="no-print cursor-pointer bg-slate-900 hover:bg-slate-700 text-white text-xs px-3 py-1.5 rounded-lg transition font-medium whitespace-nowrap">
         + Add CSV
         <input type="file" id="csvUploadHeader" accept=".csv" multiple class="hidden">
       </label>
     </div>
   </div>
 </header>
+
+<!-- ── PRINT HEADER (hidden on screen) ───────────────────── -->
+<div class="print-only max-w-7xl mx-auto px-6 pt-4 pb-2 border-b border-slate-200 mb-4">
+  <h1 class="text-lg font-bold text-slate-900">Arvin — 2026 Financial Dashboard</h1>
+  <p id="printReportDate" class="text-xs text-slate-500 mt-0.5"></p>
+</div>
 
 <!-- ── MAIN ──────────────────────────────────────────────── -->
 <main class="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5">
@@ -213,17 +235,17 @@
               <h2 class="text-sm font-semibold text-slate-900">Financial Coaching</h2>
               <p class="text-xs text-slate-400 mt-0.5">AI-powered advice updated every time you upload</p>
             </div>
-            <button id="aiKeyBtn" onclick="toggleKeyInput()" class="flex-shrink-0 text-[11px] text-slate-400 hover:text-slate-700 border border-slate-200 hover:border-slate-300 px-2.5 py-1 rounded-lg transition font-medium">
+            <button id="aiKeyBtn" onclick="toggleKeyInput()" class="no-print flex-shrink-0 text-[11px] text-slate-400 hover:text-slate-700 border border-slate-200 hover:border-slate-300 px-2.5 py-1 rounded-lg transition font-medium">
               ⚙ API Key
             </button>
           </div>
-          <div id="aiKeyRow" class="hidden mt-2.5 flex gap-2 items-center">
+          <div id="aiKeyRow" class="no-print hidden mt-2.5 flex gap-2 items-center">
             <input id="aiKeyInput" type="password" placeholder="sk-ant-api03-…" autocomplete="off"
               class="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono">
             <button onclick="saveApiKey()" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap">Save</button>
             <button onclick="clearApiKey()" class="text-xs text-red-400 hover:text-red-600 px-2 py-1.5 rounded-lg transition">Clear</button>
           </div>
-          <p id="aiKeyHint" class="hidden mt-1.5 text-[11px] text-slate-400">Key saved — coaching will generate each time you upload data. Key stays in your browser only.</p>
+          <p id="aiKeyHint" class="no-print hidden mt-1.5 text-[11px] text-slate-400">Key saved — coaching will generate each time you upload data. Key stays in your browser only.</p>
         </div>
         <div id="insightsList" class="space-y-3"></div>
       </div>
@@ -234,7 +256,7 @@
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-sm font-semibold text-slate-900">Transactions</h2>
         <div class="flex items-center gap-2">
-          <input id="txSearch" type="text" placeholder="Search…" class="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 w-36 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <input id="txSearch" type="text" placeholder="Search…" class="no-print text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 w-36 focus:outline-none focus:ring-2 focus:ring-emerald-500">
           <span class="chip bg-slate-100 text-slate-600" id="transactionCount">—</span>
         </div>
       </div>
@@ -262,7 +284,7 @@
   </div>
 </main>
 
-<footer class="text-center py-5 text-xs text-slate-300">
+<footer class="no-print text-center py-5 text-xs text-slate-300">
   All data processed locally in your browser · Nothing is sent to any server
 </footer>
 
@@ -1391,6 +1413,7 @@ function update() {
 
   if (!filteredTx.length) {
     document.getElementById('chartsSection').classList.add('hidden');
+    document.getElementById('pdfBtn').classList.add('hidden');
     return;
   }
 
@@ -1409,6 +1432,15 @@ function update() {
 
   document.getElementById('categoryPeriodLabel').textContent = months === 1 ? '1 month' : `${months} months`;
   document.getElementById('chartsSection').classList.remove('hidden');
+  document.getElementById('pdfBtn').classList.remove('hidden');
+}
+
+function downloadPDF() {
+  const sel = document.getElementById('dateFilter');
+  const period = sel.options[sel.selectedIndex].text;
+  const date = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  document.getElementById('printReportDate').textContent = `Report period: ${period} · Generated ${date}`;
+  window.print();
 }
 
 // ════════════════════════════════════════════════
