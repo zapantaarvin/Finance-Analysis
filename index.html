@@ -77,8 +77,8 @@
     </div>
     <div class="card-sm">
       <p class="text-xs text-slate-400 font-medium uppercase tracking-wide">Fixed Bills</p>
-      <p class="text-xl font-bold text-slate-900 mt-1">$1,277</p>
-      <p class="text-xs text-slate-400 mt-0.5">Car · Loan · Gym · Utils</p>
+      <p class="text-xl font-bold text-slate-900 mt-1">$1,286</p>
+      <p class="text-xs text-slate-400 mt-0.5">Car · Loan · Ins · Gym · Subs</p>
     </div>
     <div class="card-sm">
       <p class="text-xs text-slate-400 font-medium uppercase tracking-wide">Card Budget</p>
@@ -87,7 +87,7 @@
     </div>
     <div class="card-sm">
       <p class="text-xs text-slate-400 font-medium uppercase tracking-wide">Target Savings</p>
-      <p class="text-xl font-bold text-emerald-600 mt-1">$1,428</p>
+      <p class="text-xl font-bold text-emerald-600 mt-1">$1,419</p>
       <p class="text-xs text-emerald-600 font-medium mt-0.5">41% after car payoff</p>
     </div>
   </div>
@@ -152,6 +152,18 @@
       </div>
     </div>
 
+    <!-- Monthly Budget Summary -->
+    <div class="card" id="budgetSummaryCard">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-900">Monthly Budget vs. Actual</h2>
+          <p class="text-xs text-slate-400 mt-0.5">$1,795 discretionary target per month</p>
+        </div>
+        <span id="budgetSummaryChip" class="chip bg-slate-100 text-slate-500">—</span>
+      </div>
+      <div id="budgetSummaryTable"></div>
+    </div>
+
     <!-- Category Donut + Monthly Trend -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="card">
@@ -195,8 +207,25 @@
         <div id="merchantList" class="space-y-3"></div>
       </div>
       <div class="card">
-        <h2 class="text-sm font-semibold text-slate-900 mb-4">Spending Insights</h2>
-        <div id="insightsList" class="space-y-2.5"></div>
+        <div class="mb-4">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-sm font-semibold text-slate-900">Financial Coaching</h2>
+              <p class="text-xs text-slate-400 mt-0.5">AI-powered advice updated every time you upload</p>
+            </div>
+            <button id="aiKeyBtn" onclick="toggleKeyInput()" class="flex-shrink-0 text-[11px] text-slate-400 hover:text-slate-700 border border-slate-200 hover:border-slate-300 px-2.5 py-1 rounded-lg transition font-medium">
+              ⚙ API Key
+            </button>
+          </div>
+          <div id="aiKeyRow" class="hidden mt-2.5 flex gap-2 items-center">
+            <input id="aiKeyInput" type="password" placeholder="sk-ant-api03-…" autocomplete="off"
+              class="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono">
+            <button onclick="saveApiKey()" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap">Save</button>
+            <button onclick="clearApiKey()" class="text-xs text-red-400 hover:text-red-600 px-2 py-1.5 rounded-lg transition">Clear</button>
+          </div>
+          <p id="aiKeyHint" class="hidden mt-1.5 text-[11px] text-slate-400">Key saved — coaching will generate each time you upload data. Key stays in your browser only.</p>
+        </div>
+        <div id="insightsList" class="space-y-3"></div>
       </div>
     </div>
 
@@ -243,7 +272,7 @@
 // ════════════════════════════════════════════════
 
 const MONTHLY_INCOME  = 4500;
-const FIXED_COSTS_MO  = 1277;   // car + loan + gym + utils
+const FIXED_COSTS_MO  = 1286;   // car + loan + insurance + gym + phone + subs (Claude $20 + YT $8.99 + Audible $15 from Jul; ChatGPT dropped)
 const DISC_BUDGET_MO  = 1795;   // monthly card-spending target
 const DISC_WARN_MO    = 2065;   // 15% over = warning zone
 
@@ -322,14 +351,35 @@ const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct'
 // STATE
 // ════════════════════════════════════════════════
 
-let allTx        = [];
-let loadedFiles  = [];   // [{name, count}]
-let filteredTx   = [];
-let searchTx     = [];
-let shownCount   = 30;
-let catChart     = null;
-let trendChart   = null;
-let activeMonth  = null; // null | {year,month} — when user clicks a month tile
+let allTx           = [];
+let loadedFiles     = [];
+let filteredTx      = [];
+let searchTx        = [];
+let shownCount      = 30;
+let catChart        = null;
+let trendChart      = null;
+let activeMonth     = null;
+let aiPending       = false;
+
+const CARD_COLORS = {
+  red:    'bg-red-50 border border-red-100 text-red-800',
+  amber:  'bg-amber-50 border border-amber-100 text-amber-800',
+  green:  'bg-emerald-50 border border-emerald-100 text-emerald-800',
+  blue:   'bg-blue-50 border border-blue-100 text-blue-800',
+  slate:  'bg-slate-50 border border-slate-100 text-slate-700',
+  violet: 'bg-violet-50 border border-violet-100 text-violet-800',
+};
+
+const SOURCE_COLORS = {
+  'Atomic Habits':               'bg-orange-100 text-orange-700',
+  'The Psychology of Money':     'bg-blue-100 text-blue-700',
+  'I Will Teach You to Be Rich': 'bg-emerald-100 text-emerald-700',
+  'Warren Buffett':              'bg-amber-100 text-amber-700',
+  'Dave Ramsey':                 'bg-red-100 text-red-700',
+  'Morgan Housel':               'bg-blue-100 text-blue-700',
+  'James Clear':                 'bg-orange-100 text-orange-700',
+  'Ramit Sethi':                 'bg-emerald-100 text-emerald-700',
+};
 
 // ════════════════════════════════════════════════
 // FORMAT DETECTION
@@ -766,6 +816,98 @@ function renderTrend(monthly) {
 }
 
 // ════════════════════════════════════════════════
+// RENDER — MONTHLY BUDGET SUMMARY TABLE
+// ════════════════════════════════════════════════
+
+function fmtDiff(n) {
+  const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return (n >= 0 ? '+$' : '-$') + abs;
+}
+
+function renderMonthlyBudgetSummary(txs) {
+  // Aggregate 2026 spend per month
+  const monthMap = {};
+  for (const t of txs) {
+    if (t.date.getFullYear() !== 2026) continue;
+    const m = t.date.getMonth();
+    monthMap[m] = (monthMap[m] || 0) + t.amount;
+  }
+
+  const months = Object.keys(monthMap).map(Number).sort((a, b) => a - b);
+  const chip   = document.getElementById('budgetSummaryChip');
+  const table  = document.getElementById('budgetSummaryTable');
+
+  if (!months.length) {
+    chip.textContent = '—';
+    chip.className   = 'chip bg-slate-100 text-slate-500';
+    table.innerHTML  = '';
+    return;
+  }
+
+  let totalBudget = 0, totalActual = 0;
+
+  const rows = months.map(m => {
+    const actual = monthMap[m];
+    const budget = DISC_BUDGET_MO;
+    const diff   = budget - actual;   // positive = saved, negative = over
+    totalBudget += budget;
+    totalActual += actual;
+    return { m, actual, budget, diff };
+  });
+
+  const totalDiff = totalBudget - totalActual;
+
+  chip.textContent = totalDiff >= 0
+    ? `Saved ${fmt(totalDiff)} total`
+    : `Overspent ${fmt(-totalDiff)} total`;
+  chip.className = `chip ${totalDiff >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`;
+
+  table.innerHTML = `
+    <table class="w-full text-xs">
+      <thead>
+        <tr class="border-b border-slate-100">
+          <th class="text-left pb-2 font-medium text-slate-400">Month</th>
+          <th class="text-right pb-2 font-medium text-slate-400">Budget</th>
+          <th class="text-right pb-2 font-medium text-slate-400">Actual</th>
+          <th class="text-right pb-2 font-medium text-slate-400">Over / Saved</th>
+          <th class="pb-2 pl-4 w-28 hidden sm:table-cell"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-50">
+        ${rows.map(({ m, actual, budget, diff }) => {
+          const over  = diff < 0;
+          const warn  = !over && (actual / budget) > 0.85;
+          const color = over ? '#ef4444' : warn ? '#f59e0b' : '#22c55e';
+          const pct   = Math.min(actual / budget * 100, 100);
+          return `
+            <tr class="hover:bg-slate-50/50 transition">
+              <td class="py-2.5 font-medium text-slate-700">${MONTH_NAMES[m]}</td>
+              <td class="py-2.5 text-right text-slate-400">${fmt(budget)}</td>
+              <td class="py-2.5 text-right font-semibold text-slate-900">${fmt(actual)}</td>
+              <td class="py-2.5 text-right font-semibold" style="color:${color}">${fmtDiff(diff)}</td>
+              <td class="py-2.5 pl-4 hidden sm:table-cell">
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width:${pct}%;background:${color}"></div>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+      <tfoot>
+        <tr class="border-t-2 border-slate-200">
+          <td class="pt-3 pb-1 font-bold text-slate-900">Total</td>
+          <td class="pt-3 pb-1 text-right text-slate-500 font-medium">${fmt(totalBudget)}</td>
+          <td class="pt-3 pb-1 text-right font-bold text-slate-900">${fmt(totalActual)}</td>
+          <td class="pt-3 pb-1 text-right font-bold" style="color:${totalDiff >= 0 ? '#22c55e' : '#ef4444'}">${fmtDiff(totalDiff)}</td>
+          <td class="hidden sm:table-cell"></td>
+        </tr>
+      </tfoot>
+    </table>
+  `;
+}
+
+// ════════════════════════════════════════════════
 // RENDER — BUDGET VS ACTUAL
 // ════════════════════════════════════════════════
 
@@ -830,67 +972,388 @@ function renderMerchants(txs) {
 }
 
 // ════════════════════════════════════════════════
-// RENDER — INSIGHTS
+// API KEY — ANTHROPIC CLAUDE
 // ════════════════════════════════════════════════
 
-function renderInsights(txs, catTotals, filter) {
+function initKeyUI() {
+  const has = !!localStorage.getItem('finance_claude_key');
+  const btn  = document.getElementById('aiKeyBtn');
+  const hint = document.getElementById('aiKeyHint');
+  btn.textContent = has ? '⚙ AI ✓' : '⚙ API Key';
+  btn.classList.toggle('text-emerald-600', has);
+  btn.classList.toggle('border-emerald-200', has);
+  hint.classList.toggle('hidden', !has);
+}
+
+function toggleKeyInput() {
+  const row = document.getElementById('aiKeyRow');
+  row.classList.toggle('hidden');
+  if (!row.classList.contains('hidden')) {
+    const k = localStorage.getItem('finance_claude_key');
+    if (k) document.getElementById('aiKeyInput').value = k;
+    document.getElementById('aiKeyInput').focus();
+  }
+}
+
+function saveApiKey() {
+  const k = document.getElementById('aiKeyInput').value.trim();
+  if (!k) return;
+  localStorage.setItem('finance_claude_key', k);
+  document.getElementById('aiKeyRow').classList.add('hidden');
+  document.getElementById('aiKeyInput').value = '';
+  initKeyUI();
+  if (allTx.length) triggerAICoaching();
+}
+
+function clearApiKey() {
+  localStorage.removeItem('finance_claude_key');
+  document.getElementById('aiKeyInput').value = '';
+  document.getElementById('aiKeyRow').classList.add('hidden');
+  initKeyUI();
+}
+
+// ════════════════════════════════════════════════
+// AI COACHING — ANTHROPIC CLAUDE HAIKU
+// ════════════════════════════════════════════════
+
+function showCoachingLoading() {
+  document.getElementById('insightsList').innerHTML = `
+    <div class="flex items-center gap-3 p-4 rounded-lg bg-slate-50 border border-slate-100">
+      <div class="flex gap-1 flex-shrink-0">
+        <div class="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style="animation-delay:0ms"></div>
+        <div class="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style="animation-delay:120ms"></div>
+        <div class="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style="animation-delay:240ms"></div>
+      </div>
+      <p class="text-xs text-slate-500">Claude is analyzing your spending and finding the best advice for you…</p>
+    </div>`;
+}
+
+function renderAICards(insights) {
+  if (!insights || !insights.length) return;
+  document.getElementById('insightsList').innerHTML = insights.map(({ icon, color, title, source, message, steps, quote }) => `
+    <div class="rounded-xl p-3.5 ${CARD_COLORS[color] || CARD_COLORS.slate}">
+      <div class="flex gap-2.5">
+        <span class="flex-shrink-0 text-lg leading-none mt-0.5">${icon || '💡'}</span>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+            <span class="text-xs font-bold">${title}</span>
+            ${source ? `<span class="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${SOURCE_COLORS[source] || 'bg-slate-100 text-slate-500'}">${source}</span>` : ''}
+          </div>
+          <p class="text-xs leading-relaxed mb-2">${message}</p>
+          ${steps && steps.length ? `<div class="space-y-1.5">${steps.map((s, i) => `
+            <div class="flex gap-2 items-start">
+              <span class="flex-shrink-0 w-5 h-5 rounded-full bg-white/70 border border-current/10 flex items-center justify-center text-[10px] font-bold mt-0.5">${i + 1}</span>
+              <p class="text-xs leading-relaxed flex-1">${s}</p>
+            </div>`).join('')}</div>` : ''}
+          ${quote ? `<p class="text-[11px] italic opacity-60 mt-2 pt-2 border-t border-current/10">"${quote}"</p>` : ''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function triggerAICoaching() {
+  const apiKey = localStorage.getItem('finance_claude_key');
+  if (!apiKey || !allTx.length || aiPending) return;
+  aiPending = true;
+  showCoachingLoading();
+
+  const catAll   = byCat(allTx);
+  const moAll    = byMonthKey(allTx);
+  const moCount  = Object.keys(moAll).length || 1;
+  const totalSpd = Object.values(catAll).reduce((a, b) => a + b, 0);
+  const avgMo    = totalSpd / moCount;
+  const saveEst  = MONTHLY_INCOME - FIXED_COSTS_MO - avgMo;
+  const saveRate = Math.round((saveEst / MONTHLY_INCOME) * 100);
+  const dineCount = allTx.filter(t => t.category === 'Dining Out').length;
+  const top5 = [...allTx].sort((a, b) => b.amount - a.amount).slice(0, 5)
+    .map(t => `$${t.amount.toFixed(2)} — ${t.description}`).join('; ');
+
+  const catLines = Object.entries(catAll).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => {
+    const mo  = (amt / moCount).toFixed(0);
+    const bgt = CAT_BUDGETS[cat];
+    const tag = bgt ? (amt / moCount > bgt ? ' OVER BUDGET' : ' under budget') : '';
+    return `${cat}: $${mo}/mo${bgt ? ` (target $${bgt})` : ''}${tag}`;
+  }).join('\n');
+
+  const moLines = Object.entries(moAll).sort().map(([k, v]) => `${k}: $${v.toFixed(0)}`).join(', ');
+
+  const prompt = `You are Arvin's personal financial coach. Use the latest research from trusted books, studies, and financial experts to give him personalized, motivating advice based on his REAL spending data.
+
+ARVIN'S FINANCIAL SNAPSHOT (${moCount} months of data):
+- Monthly take-home: $${MONTHLY_INCOME}
+- Fixed bills: $${FIXED_COSTS_MO}/mo (car payment $712, student loan $250, car insurance $110, gym $100, phone $50, subscriptions: Claude Pro $20, YouTube Student $8.99, Audible $15)
+- Card budget target: $${DISC_BUDGET_MO}/mo
+- Avg card spending: $${avgMo.toFixed(0)}/mo
+- Estimated savings: $${saveEst.toFixed(0)}/mo (${saveRate}% of income)
+- Restaurant visits: ${dineCount} this period
+- Monthly trend: ${moLines}
+
+SPENDING BY CATEGORY:
+${catLines}
+
+TOP 5 CHARGES: ${top5}
+
+KNOWN CONTEXT:
+- He gives ~$41/mo to his church — intentional and non-negotiable
+- He travels to the Philippines regularly to visit family — meaningful, not frivolous
+- Car loan payoff will free up $712/mo, boosting savings rate to ~41%
+- He is building better financial habits and wants to improve
+
+YOUR TASK: Write 5-7 coaching insights that are:
+1. EASY TO UNDERSTAND — simple words, like a friend explaining it
+2. MOTIVATIONAL — celebrate wins, frame problems as fixable
+3. BACKED by real research (Atomic Habits, The Psychology of Money, I Will Teach You to Be Rich, Warren Buffett, Dave Ramsey, or other trusted sources you find relevant)
+4. Have 2-4 NUMBERED STEPS that are SPECIFIC and doable THIS WEEK
+5. Use his ACTUAL dollar amounts to make it personal
+
+Return ONLY valid JSON array, no markdown fences. Each object:
+{"icon":"emoji","color":"green|amber|red|blue|violet|slate","title":"Max 7 words","source":"Book or Author name","message":"2-3 warm sentences with his real numbers","steps":["Step 1","Step 2","Step 3 optional"],"quote":"Short quote with author or empty string"}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const raw  = (data.content[0]?.text || '').trim()
+      .replace(/^```json?\n?/i, '').replace(/\n?```$/i, '').trim();
+    renderAICards(JSON.parse(raw));
+  } catch (err) {
+    console.error('AI coaching error:', err);
+    renderFallbackInsights(allTx, byCat(filteredTx.length ? filteredTx : allTx), moCount);
+    document.getElementById('insightsList').insertAdjacentHTML('afterbegin',
+      `<div class="p-2.5 rounded-lg bg-amber-50 border border-amber-100 text-amber-700 text-xs mb-2">
+        Could not reach Claude — check your API key. Showing built-in advice instead. (${err.message})
+      </div>`);
+  } finally {
+    aiPending = false;
+  }
+}
+
+// ════════════════════════════════════════════════
+// RENDER — FINANCIAL COACHING
+// ════════════════════════════════════════════════
+
+function renderInsights_old(txs, catTotals, filter) {
+  // kept for reference — logic moved to renderFallbackInsights
   const months = monthCount(filter);
-  const COLORS = {
-    red:   'bg-red-50 border border-red-100 text-red-700',
-    amber: 'bg-amber-50 border border-amber-100 text-amber-700',
-    green: 'bg-emerald-50 border border-emerald-100 text-emerald-700',
-    blue:  'bg-blue-50 border border-blue-100 text-blue-700',
-    slate: 'bg-slate-50 border border-slate-100 text-slate-600',
-  };
-
-  const ins = [];
-
-  // Dining
-  const dineAvg = (catTotals['Dining Out'] || 0) / months;
-  const dineBgt = CAT_BUDGETS['Dining Out'];
+  const diningAvg  = (catTotals['Dining Out'] || 0) / months;
+  const diningBgt  = CAT_BUDGETS['Dining Out'];
+  const shopAvg    = (catTotals['Shopping'] || 0) / months;
+  const givingAvg  = (catTotals['Church & Giving'] || 0) / months;
+  const travelAvg  = (catTotals['Travel'] || 0) / months;
+  const totalAvg   = Object.values(catTotals).reduce((a, b) => a + b, 0) / months;
+  const saveEst    = MONTHLY_INCOME - FIXED_COSTS_MO - totalAvg;
+  const saveRate   = saveEst / MONTHLY_INCOME;
   const dineVisits = txs.filter(t => t.category === 'Dining Out');
   const avgTicket  = dineVisits.length ? (catTotals['Dining Out'] || 0) / dineVisits.length : 0;
+  const biggest    = [...txs].sort((a, b) => b.amount - a.amount)[0];
+  const ins = [];
 
-  if (dineAvg > dineBgt) {
-    ins.push({ icon: '🍽️', c: 'red',
-      t: `Dining out avg <strong>${fmt(dineAvg)}/mo</strong> — <strong>${fmt(dineAvg - dineBgt)} over</strong> your ${fmt(dineBgt)} budget.` });
-  } else if (dineAvg > 0) {
-    ins.push({ icon: '🍽️', c: 'green',
-      t: `Dining out avg <strong>${fmt(dineAvg)}/mo</strong> — within your ${fmt(dineBgt)} budget. Nice!` });
+  // ── Dining ──────────────────────────────────────
+  if (diningAvg > diningBgt) {
+    ins.push({
+      c: 'red', icon: '🍽️',
+      source: 'Atomic Habits',
+      title: 'Reduce dining friction',
+      body: `Dining avg <strong>${fmt(diningAvg)}/mo — ${fmt(diningAvg - diningBgt)} over</strong> your ${fmt(diningBgt)} target. James Clear: <em>"You don't rise to your goals, you fall to your systems."</em> Add friction: remove delivery apps from your home screen, prep meals on Sunday, set a rule — dining out only on weekends. Willpower fades; a system doesn't.`,
+    });
+  } else if (diningAvg > 0) {
+    ins.push({
+      c: 'green', icon: '🍽️',
+      source: 'Atomic Habits',
+      title: 'Dining habit is working',
+      body: `Dining avg <strong>${fmt(diningAvg)}/mo</strong> — within your ${fmt(diningBgt)} budget. James Clear: <em>"Every action you take is a vote for the type of person you wish to become."</em> You're consistently voting for intentional spending.`,
+    });
   }
 
-  if (dineVisits.length) {
-    ins.push({ icon: '🧾', c: 'blue',
-      t: `<strong>${dineVisits.length} restaurant visits</strong> in this period · avg ticket <strong>${fmt(avgTicket)}</strong>.` });
+  // ── Restaurant visit quality check ──────────────
+  if (dineVisits.length > 5) {
+    ins.push({
+      c: 'slate', icon: '🧾',
+      source: 'I Will Teach You to Be Rich',
+      title: 'Conscious spending check',
+      body: `<strong>${dineVisits.length} restaurant visits</strong> this period · avg ticket <strong>${fmt(avgTicket)}</strong>. Ramit Sethi: <em>"Spend extravagantly on what you love, cut mercilessly on what you don't."</em> Were all ${dineVisits.length} visits genuinely satisfying, or were some just convenient defaults? Cut the defaults; protect the ones that matter.`,
+    });
   }
 
-  // Biggest charge
-  const biggest = [...txs].sort((a, b) => b.amount - a.amount)[0];
+  // ── Shopping spikes ──────────────────────────────
+  if (shopAvg > 150) {
+    ins.push({
+      c: 'amber', icon: '🛍️',
+      source: 'Atomic Habits',
+      title: '48-hour rule for impulse buys',
+      body: `Shopping avg <strong>${fmt(shopAvg)}/mo</strong>. Use James Clear's implementation intention: <em>"I will wait 48 hours before buying anything over $50 that wasn't planned."</em> This single friction breaks the impulse-buy loop. The pause replaces the automatic purchase response — no willpower required.`,
+    });
+  }
+
+  // ── Savings rate ────────────────────────────────
+  if (saveEst > 0 && saveRate >= 0.2) {
+    ins.push({
+      c: 'green', icon: '💰',
+      source: 'The Psychology of Money',
+      title: 'Solid savings rate',
+      body: `Est. <strong>${fmt(saveEst)}/mo saved (${Math.round(saveRate * 100)}%)</strong>. Morgan Housel: <em>"The ability to do what you want, when you want, with who you want — that's wealth."</em> A consistent savings rate is the most powerful financial habit you can build. Keep automating it.`,
+    });
+  } else if (saveEst > 0) {
+    ins.push({
+      c: 'amber', icon: '💰',
+      source: 'Warren Buffett',
+      title: 'Pay yourself first',
+      body: `Est. savings <strong>${fmt(saveEst)}/mo (${Math.round(saveRate * 100)}%)</strong>. Buffett: <em>"Do not save what is left after spending; spend what is left after saving."</em> Set an automatic transfer on payday — even $300/mo auto-saved is $3,600/year before you see it. What you don't see, you don't spend.`,
+    });
+  } else {
+    ins.push({
+      c: 'red', icon: '⚠️',
+      source: 'The Psychology of Money',
+      title: 'Spending is exceeding income this period',
+      body: `Card avg ${fmt(totalAvg)}/mo puts estimated savings negative. Morgan Housel: <em>"Savings is the gap between your ego and your income."</em> Pick one category to cut by 20% this month — not forever, just this month — and redirect it to savings.`,
+    });
+  }
+
+  // ── Church giving ────────────────────────────────
+  if (givingAvg >= 40) {
+    ins.push({
+      c: 'green', icon: '🙏',
+      source: 'The Psychology of Money',
+      title: 'Giving habit is locked in',
+      body: `Consistent <strong>${fmt(givingAvg)}/mo</strong> in giving. Morgan Housel: <em>"The highest form of wealth is the ability to wake up and say, 'I can do what I want today.'"</em> Aligning your money with your values — not just your wants — is the foundation of that freedom. Protect this habit.`,
+    });
+  }
+
+  // ── Travel ───────────────────────────────────────
+  if (travelAvg > 200) {
+    ins.push({
+      c: 'blue', icon: '✈️',
+      source: 'I Will Teach You to Be Rich',
+      title: 'Plan travel as a sinking fund',
+      body: `Travel avg <strong>${fmt(travelAvg)}/mo</strong>. Ramit Sethi calls this your "splurge" — worth protecting. But big trips shouldn't hit your budget as shocks. Open a dedicated travel fund and auto-transfer $200–300/mo so the next Philippines trip is already paid for before you book.`,
+    });
+  }
+
+  // ── Biggest charge ───────────────────────────────
   if (biggest) {
-    ins.push({ icon: '💸', c: 'amber',
-      t: `Biggest charge: <strong>${fmt(biggest.amount)}</strong> at ${cleanName(biggest.description)} on ${fmtDate(biggest.date)}.` });
+    ins.push({
+      c: 'slate', icon: '💸',
+      source: 'Atomic Habits',
+      title: 'Big wins beat small cuts',
+      body: `Biggest charge: <strong>${fmt(biggest.amount)}</strong> at ${cleanName(biggest.description)} on ${fmtDate(biggest.date)}. James Clear: focus energy on the high-leverage levers, not just cutting small luxuries. One large unplanned expense costs more than 30 small frugalities save. Plan for your big categories in advance.`,
+    });
   }
 
-  // Card spend vs budget
-  const cardTotal = Object.values(catTotals).reduce((a, b) => a + b, 0);
-  const cardAvg   = cardTotal / months;
-  const saveEst   = MONTHLY_INCOME - FIXED_COSTS_MO - cardAvg;
-  ins.push({ icon: '💰', c: saveEst > 1200 ? 'green' : saveEst > 0 ? 'amber' : 'red',
-    t: `Est. monthly savings: <strong>${fmt(saveEst)}</strong> (income − fixed ${fmt(FIXED_COSTS_MO)} − card avg ${fmt(cardAvg)}).` });
-
-  // Travel note if any
-  const travelAmt = (catTotals['Travel'] || 0) / months;
-  if (travelAmt > 200) {
-    ins.push({ icon: '✈️', c: 'slate',
-      t: `Travel spending avg <strong>${fmt(travelAmt)}/mo</strong> — not in budget baseline; factor into savings.` });
+  // ── 1% principle ────────────────────────────────
+  if (totalAvg > 0) {
+    const onePercent = totalAvg * 0.01;
+    ins.push({
+      c: 'violet', icon: '📈',
+      source: 'Atomic Habits',
+      title: '1% better compounds fast',
+      body: `James Clear: <em>"A 1% improvement every day leads to 37× better in a year."</em> Reducing total card spend by just 1% = <strong>${fmt(onePercent)}/mo</strong> saved, or <strong>${fmt(onePercent * 12)}/year</strong> — without any major lifestyle change. That's not sacrifice, that's getting slightly more intentional each month.`,
+    });
   }
 
-  document.getElementById('insightsList').innerHTML = ins.map(({ icon, c, t }) => `
-    <div class="flex gap-2 p-2.5 rounded-lg ${COLORS[c]}">
-      <span class="flex-shrink-0">${icon}</span>
-      <p class="text-xs leading-relaxed">${t}</p>
-    </div>
-  `).join('');
+  renderAICards(ins.map(({ icon, c, source, title, body }) => ({
+    icon, color: c, source, title, message: body, steps: [], quote: '',
+  })));
+}
+
+function renderFallbackInsights(txs, catTotals, months) {
+  const diningAvg  = (catTotals['Dining Out'] || 0) / months;
+  const shopAvg    = (catTotals['Shopping']   || 0) / months;
+  const givingAvg  = (catTotals['Church & Giving'] || 0) / months;
+  const travelAvg  = (catTotals['Travel']     || 0) / months;
+  const totalAvg   = Object.values(catTotals).reduce((a, b) => a + b, 0) / months;
+  const saveEst    = MONTHLY_INCOME - FIXED_COSTS_MO - totalAvg;
+  const saveRate   = saveEst / MONTHLY_INCOME;
+  const dineVisits = txs.filter(t => t.category === 'Dining Out');
+  const avgTicket  = dineVisits.length ? (catTotals['Dining Out'] || 0) / dineVisits.length : 0;
+  const biggest    = [...txs].sort((a, b) => b.amount - a.amount)[0];
+  const onePercent = totalAvg * 0.01;
+  const ins        = [];
+
+  if (diningAvg > CAT_BUDGETS['Dining Out']) {
+    ins.push({ icon:'🍽️', color:'red', source:'Atomic Habits', title:'Your dining habit needs a system',
+      message:`You averaged ${fmt(diningAvg)}/mo eating out — ${fmt(diningAvg - CAT_BUDGETS['Dining Out'])} over your ${fmt(CAT_BUDGETS['Dining Out'])} target. The good news? You don't need willpower — you need a simple system that makes eating out harder.`,
+      steps:['Pack lunch Mon–Wed — saves ~$150/mo instantly','Set a rule: dining out on weekends only','Delete food delivery apps from your phone home screen','Prep 2 dinners on Sunday so weeknight eating is easy'],
+      quote:'You don\'t rise to your goals, you fall to your systems. — James Clear' });
+  } else if (diningAvg > 0) {
+    ins.push({ icon:'🍽️', color:'green', source:'Atomic Habits', title:'Dining habit is working — keep going!',
+      message:`You averaged ${fmt(diningAvg)}/mo on dining — right within your ${fmt(CAT_BUDGETS['Dining Out'])} budget. That is a real win. Every time you stay within budget, you are building the identity of someone who spends with intention.`,
+      steps:['Keep your current dining rules in place','Track which restaurants feel truly worth it vs. just convenient'],
+      quote:'Every action you take is a vote for the type of person you wish to become. — James Clear' });
+  }
+
+  if (dineVisits.length > 5) {
+    ins.push({ icon:'🧾', color:'slate', source:'I Will Teach You to Be Rich', title:'Are all your restaurant trips worth it?',
+      message:`You had ${dineVisits.length} restaurant visits this period with an average ticket of ${fmt(avgTicket)}. Not all of those were probably memorable. Ramit Sethi says to spend big on what you love — and cut ruthlessly on what you don't.`,
+      steps:[`Pick your top 5 favorite restaurants — spend freely there`,`Cut the "meh" visits that were just convenient`,`Redirect those savings to your travel or car payoff fund`],
+      quote:'Spend extravagantly on the things you love, cut mercilessly on what you don\'t. — Ramit Sethi' });
+  }
+
+  if (shopAvg > 150) {
+    ins.push({ icon:'🛍️', color:'amber', source:'Atomic Habits', title:'Add a pause before you buy',
+      message:`Shopping averaged ${fmt(shopAvg)}/mo. You don't need to stop — you just need one rule that breaks the impulse. A 48-hour pause is the single most effective habit change for discretionary spending.`,
+      steps:['Wait 48 hours before any unplanned purchase over $50','Ask yourself: will I still want this next week?','Keep a running wish list — buy from it once a month','Unsubscribe from store marketing emails this week'],
+      quote:'' });
+  }
+
+  if (saveEst > 0 && saveRate >= 0.2) {
+    ins.push({ icon:'💰', color:'green', source:'The Psychology of Money', title:'Your savings rate is genuinely impressive',
+      message:`You are saving an estimated ${fmt(saveEst)}/mo — that is ${Math.round(saveRate * 100)}% of your income. Most people never get here. When you pay off your car, that number jumps to 41%. You are on the right path.`,
+      steps:['Automate savings on payday so it happens before you spend','Put saved money in a high-yield savings account now','After car payoff, redirect the $712/mo directly to savings'],
+      quote:'The ability to do what you want, when you want — that\'s wealth. — Morgan Housel' });
+  } else if (saveEst > 0) {
+    ins.push({ icon:'💰', color:'amber', source:'Warren Buffett', title:'Pay yourself before anything else',
+      message:`You are saving an estimated ${fmt(saveEst)}/mo (${Math.round(saveRate * 100)}%). Small increases here compound fast — an extra $200/mo saved is $2,400/year before any interest.`,
+      steps:['Set an auto-transfer of $200 on every payday','Treat savings like a bill — not optional','After car payoff redirect that $712/mo to savings automatically'],
+      quote:'Do not save what is left after spending; spend what is left after saving. — Warren Buffett' });
+  }
+
+  if (givingAvg >= 40) {
+    ins.push({ icon:'🙏', color:'green', source:'The Psychology of Money', title:'Your giving habit is a real strength',
+      message:`You give ${fmt(givingAvg)}/mo consistently. Most people say they want to give more but never do. You actually do it — and that same discipline is exactly what builds every other good financial habit.`,
+      steps:['Protect this line item — it is non-negotiable in your budget','Let it remind you that you can commit to any financial habit'],
+      quote:'' });
+  }
+
+  if (travelAvg > 200) {
+    ins.push({ icon:'✈️', color:'blue', source:'I Will Teach You to Be Rich', title:'Turn travel from a shock into a plan',
+      message:`Travel averaged ${fmt(travelAvg)}/mo — clearly something meaningful to you. Ramit Sethi says keep what you love, but plan for it so it never hits your budget as a surprise.`,
+      steps:[`Open a separate "Philippines Trip" savings account today`,`Auto-transfer $${Math.round(travelAvg)}/mo into it every payday`,'Book flights 3–4 months early to save 20–40% on airfare'],
+      quote:'' });
+  }
+
+  if (biggest) {
+    ins.push({ icon:'💸', color:'slate', source:'Atomic Habits', title:'Plan big expenses before they happen',
+      message:`Your biggest charge was ${fmt(biggest.amount)} at ${cleanName(biggest.description)}. Large planned expenses are totally fine — large surprise expenses are the real budget killers. The fix is simple: list them in advance.`,
+      steps:['List expected purchases over $300 for the next 3 months','Create a sinking fund for each one','Review this list monthly when you upload your new statement'],
+      quote:'' });
+  }
+
+  ins.push({ icon:'📈', color:'violet', source:'Atomic Habits', title:'1% improvement is all it takes',
+    message:`If you reduced total card spending by just 1%, that is ${fmt(onePercent)}/mo saved — or ${fmt(onePercent * 12)}/year. No drastic cuts needed. Just slightly more intentional each month.`,
+    steps:['Pick ONE category to be 5% more intentional this month','Review this dashboard every time you upload a new statement','Celebrate every month you stay under your $${DISC_BUDGET_MO} target'],
+    quote:'A 1% improvement every day leads to 37x better in a year. — James Clear' });
+
+  renderAICards(ins);
+}
+
+function renderInsights(txs, catTotals, filter) {
+  if (!localStorage.getItem('finance_claude_key')) {
+    renderFallbackInsights(txs, catTotals, monthCount(filter));
+  }
 }
 
 // ════════════════════════════════════════════════
@@ -936,6 +1399,7 @@ function update() {
   const months    = monthCount(filter);
 
   renderStats(filteredTx, filter);
+  renderMonthlyBudgetSummary(allTx);
   renderCatChart(catTotals);
   renderTrend(monthly);
   renderBudget(catTotals, filter);
@@ -968,6 +1432,7 @@ function loadCSVText(text, filename) {
   renderFileTags();
   render2026Grid(allTx);
   update();
+  triggerAICoaching();
 
   console.log(`Loaded "${filename}": ${newTxs.length} parsed, ${added} new after dedup`);
 }
@@ -992,6 +1457,7 @@ function wireInput(id) {
 async function init() {
   render2026Grid([]);
   renderFileTags();
+  initKeyUI();
 
   wireInput('csvUploadHeader');
   wireInput('csvUploadMain');
