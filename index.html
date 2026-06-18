@@ -33,6 +33,8 @@
     .file-tag button { color:#94a3b8; line-height:1; font-size:13px; }
     .file-tag button:hover { color:#ef4444; }
     .print-only { display:none; }
+    .tx-actions { opacity:0; transition:opacity .15s; }
+    tr:hover .tx-actions { opacity:1; }
     @media print {
       @page { margin: 1.5cm; }
       body { background:#fff !important; }
@@ -1440,7 +1442,7 @@ function renderInsights(txs, catTotals, filter) {
 function renderTable(txs, show) {
   document.getElementById('transactionCount').textContent = txs.length.toLocaleString() + ' rows';
   document.getElementById('transactionTable').innerHTML = txs.slice(0, show).map(t => `
-    <tr class="group hover:bg-slate-50/60 transition">
+    <tr class="hover:bg-slate-50/60 transition">
       <td class="py-2.5 px-5 text-slate-400 whitespace-nowrap">${fmtDate(t.date)}</td>
       <td class="py-2.5 pr-4 max-w-[200px]" title="${t.description}${t._note ? ' · ' + t._note : ''}">
         <div class="flex items-center gap-1.5 min-w-0">
@@ -1456,7 +1458,7 @@ function renderTable(txs, show) {
       <td class="py-2.5 px-5 text-right">
         <div class="flex items-center justify-end gap-2">
           <span class="font-semibold text-slate-900">${fmt(t.amount)}</span>
-          <div class="no-print flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div class="no-print tx-actions flex gap-0.5">
             <button onclick="openEditModal('${t._id}')" title="Edit" class="p-1 rounded hover:bg-blue-50 text-slate-300 hover:text-blue-500 transition-colors">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
