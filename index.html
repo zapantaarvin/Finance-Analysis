@@ -101,12 +101,12 @@
     </div>
     <div class="card-sm">
       <p class="text-xs text-slate-400 font-medium uppercase tracking-wide">Fixed Bills</p>
-      <p class="text-xl font-bold text-slate-900 mt-1">$1,286</p>
+      <p class="text-xl font-bold text-slate-900 mt-1">$1,542</p>
       <p class="text-xs text-slate-400 mt-0.5">Car · Loan · Ins · Gym · Subs</p>
     </div>
     <div class="card-sm">
       <p class="text-xs text-slate-400 font-medium uppercase tracking-wide">Card Budget</p>
-      <p class="text-xl font-bold text-amber-600 mt-1">$1,795</p>
+      <p class="text-xl font-bold text-amber-600 mt-1">$961</p>
       <p class="text-xs text-slate-400 mt-0.5">Discretionary target/mo</p>
     </div>
     <div class="card-sm">
@@ -121,7 +121,7 @@
     <div class="flex items-center justify-between mb-4">
       <div>
         <h2 class="text-sm font-semibold text-slate-900">2026 Monthly Tracker</h2>
-        <p class="text-xs text-slate-400 mt-0.5">Click a month to filter · Green ≤$1,795 · Amber ≤$2,065 · Red over</p>
+        <p class="text-xs text-slate-400 mt-0.5">Click a month to filter · Green ≤$961 · Amber ≤$1,105 · Red over</p>
       </div>
       <div class="text-right">
         <p class="text-xs text-slate-400">2026 total spend</p>
@@ -181,7 +181,7 @@
       <div class="flex items-center justify-between mb-4">
         <div>
           <h2 class="text-sm font-semibold text-slate-900">Monthly Budget vs. Actual</h2>
-          <p class="text-xs text-slate-400 mt-0.5">$1,795 discretionary target per month</p>
+          <p class="text-xs text-slate-400 mt-0.5">$961 discretionary target per month</p>
         </div>
         <span id="budgetSummaryChip" class="chip bg-slate-100 text-slate-500">—</span>
       </div>
@@ -347,9 +347,9 @@
 // ════════════════════════════════════════════════
 
 const MONTHLY_INCOME  = 4500;
-const FIXED_COSTS_MO  = 1286;   // car + loan + insurance + gym + phone + subs (Claude $20 + YT $8.99 + Audible $15 from Jul; ChatGPT dropped)
-const DISC_BUDGET_MO  = 1795;   // monthly card-spending target
-const DISC_WARN_MO    = 2065;   // 15% over = warning zone
+const FIXED_COSTS_MO  = 1542;   // 401k loan $643 + student loans $250 + master's $250 + car insurance $110 + church $110 + gym $100 + phone $25 + Claude $20 + Codex $20 + YouTube $14
+const DISC_BUDGET_MO  = 961;    // monthly card-spending target
+const DISC_WARN_MO    = 1105;   // 15% over = warning zone
 
 const CAT_COLORS = {
   'Dining Out':      '#ef4444',
@@ -1160,7 +1160,7 @@ async function triggerAICoaching() {
 
 ARVIN'S FINANCIAL SNAPSHOT (${moCount} months of data):
 - Monthly take-home: $${MONTHLY_INCOME}
-- Fixed bills: $${FIXED_COSTS_MO}/mo (car payment $712, student loan $250, car insurance $110, gym $100, phone $50, subscriptions: Claude Pro $20, YouTube Student $8.99, Audible $15)
+- Fixed bills: $${FIXED_COSTS_MO}/mo (401k loan $643, student loans $250, master's $250, car insurance $110, church $110, gym $100, phone $25, subscriptions: Claude $20, Codex $20, YouTube $14)
 - Card budget target: $${DISC_BUDGET_MO}/mo
 - Avg card spending: $${avgMo.toFixed(0)}/mo
 - Estimated savings: $${saveEst.toFixed(0)}/mo (${saveRate}% of income)
